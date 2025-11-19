@@ -112,11 +112,11 @@ const upload = multer({
 
 // MySQL Database Connection
 const dbConfig = {
-  host: "localhost",
-  user: "root",
-  password: "",
+  host: "dpg-d4ess8mr433s738tsrl0-a",
+  user: "social_publisher_user",
+  password: "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
   database: "social_publisher",
-  port: 4004,
+  port: 5432,
 };
 
 // Facebook Configuration
