@@ -23,34 +23,9 @@ async function ensureBaseDir() {
   }
 }
 
-// Middleware
-// Configure CORS with a whitelist. Make it configurable via env var
-// Set ALLOWED_ORIGINS="http://localhost:5174,http://localhost:3000" to override
-// const DEFAULT_ALLOWED_ORIGINS = [
-//   "http://localhost:3000",
-//   "http://localhost:5000",
-//   "http://localhost:5174",
-//   "https://scalably-filamented-junie.ngrok-free.dev",
-//   "https://product-5.onrender.com",
-// ];
-
-// const allowedOrigins = process.env.ALLOWED_ORIGINS
-//   ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
-//   : DEFAULT_ALLOWED_ORIGINS;
-
-// console.log("🔒 Allowed origins:", allowedOrigins);
-
-// Use a dynamic origin check so we can accept only configured frontends.
 app.use(
   cors({
-    origin: [
-      "https://product-5.onrender.com",
-      "http://localhost:3000",
-      "http://localhost:5000",
-      "http://localhost:5174",
-      "https://scalably-filamented-junie.ngrok-free.dev",
-      "https://product-3-96i8.onrender.com", // Add your backend URL too
-    ],
+    origin: "*", // Allow all origins
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -61,6 +36,8 @@ app.use(
     ],
   })
 );
+
+app.options("*", cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
