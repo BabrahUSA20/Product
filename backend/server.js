@@ -31,6 +31,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5000",
   "http://localhost:5174",
   "https://scalably-filamented-junie.ngrok-free.dev",
+  "https://product-5.onrender.com",
 ];
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -42,13 +43,8 @@ console.log("🔒 Allowed origins:", allowedOrigins);
 // Use a dynamic origin check so we can accept only configured frontends.
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      console.warn(`Blocked CORS origin: ${origin}`);
-      return callback(new Error("Not allowed by CORS"), false);
-    },
+    origin: ["https://product-5.onrender.com", "http://localhost:3000"],
+    credentials: true,
   })
 );
 
