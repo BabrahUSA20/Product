@@ -13,7 +13,30 @@ import {
   X,
 } from "lucide-react";
 
-const API_URL = "http://localhost:5000/api";
+// const API_URL = "http://localhost:5000/api";
+const API_URL = "https://product-3-96i8.onrender.com/api";
+
+// const API_URL = window.location.hostname.includes("ngrok-free.dev")
+//   ? "https://scalably-filamented-junie.ngrok-free.dev/api"
+//   : "http://localhost:5000/api";
+
+const customFetch = (url, options = {}) => {
+  const defaultOptions = {
+    headers: {
+      "ngrok-skip-browser-warning": "true",
+      "User-Agent": "custom-agent",
+    },
+  };
+
+  return fetch(url, {
+    ...defaultOptions,
+    ...options,
+    headers: {
+      ...defaultOptions.headers,
+      ...options.headers,
+    },
+  });
+};
 
 export default function SocialPublisher() {
   const [activeTab, setActiveTab] = useState("publish");
@@ -56,13 +79,14 @@ export default function SocialPublisher() {
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
+    console.log("API URL:", API_URL);
     fetchPlatforms();
     fetchPosts();
   }, []);
 
   const fetchPlatforms = async () => {
     try {
-      const response = await fetch(`${API_URL}/platforms`);
+      const response = await customFetch(`${API_URL}/platforms`);
       const data = await response.json();
       if (data.success) setPlatforms(data.data);
     } catch (error) {
@@ -72,7 +96,7 @@ export default function SocialPublisher() {
 
   const fetchPosts = async () => {
     try {
-      const response = await fetch(`${API_URL}/posts`);
+      const response = await customFetch(`${API_URL}/posts`);
       const data = await response.json();
       if (data.success) setPosts(data.data);
     } catch (error) {
@@ -187,7 +211,7 @@ export default function SocialPublisher() {
         ? `${API_URL}/platforms/${editingPlatform.id}`
         : `${API_URL}/platforms`;
 
-      const response = await fetch(url, {
+      const response = await customFetch(url, {
         method: editingPlatform ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(platformForm),

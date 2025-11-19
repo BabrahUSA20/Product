@@ -24,10 +24,47 @@ async function ensureBaseDir() {
 }
 
 // Middleware
-app.use(cors());
+// Configure CORS with a whitelist. Make it configurable via env var
+// Set ALLOWED_ORIGINS="http://localhost:5174,http://localhost:3000" to override
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5174",
+  "https://scalably-filamented-junie.ngrok-free.dev",
+];
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+  : DEFAULT_ALLOWED_ORIGINS;
+
+
+app.use(cors({
+  origin: "https://your-frontend-render-url.onrender.com",
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static("uploads"));
+// Serve static files with proper headers for external access
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "uploads"), {
+    setHeaders: (res, path) => {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
+
+// Handle preflight requests
+app.options("*", cors());
+
+// Log all incoming requests (helpful for debugging)
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log("Origin:", req.headers.origin);
+  console.log("User-Agent:", req.headers["user-agent"]);
+  next();
+});
 
 // File upload configuration
 const storage = multer.diskStorage({
