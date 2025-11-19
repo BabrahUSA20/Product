@@ -26,25 +26,39 @@ async function ensureBaseDir() {
 // Middleware
 // Configure CORS with a whitelist. Make it configurable via env var
 // Set ALLOWED_ORIGINS="http://localhost:5174,http://localhost:3000" to override
-const DEFAULT_ALLOWED_ORIGINS = [
-  "http://localhost:3000",
-  "http://localhost:5000",
-  "http://localhost:5174",
-  "https://scalably-filamented-junie.ngrok-free.dev",
-  "https://product-5.onrender.com",
-];
+// const DEFAULT_ALLOWED_ORIGINS = [
+//   "http://localhost:3000",
+//   "http://localhost:5000",
+//   "http://localhost:5174",
+//   "https://scalably-filamented-junie.ngrok-free.dev",
+//   "https://product-5.onrender.com",
+// ];
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
-  : DEFAULT_ALLOWED_ORIGINS;
+// const allowedOrigins = process.env.ALLOWED_ORIGINS
+//   ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
+//   : DEFAULT_ALLOWED_ORIGINS;
 
-console.log("🔒 Allowed origins:", allowedOrigins);
+// console.log("🔒 Allowed origins:", allowedOrigins);
 
 // Use a dynamic origin check so we can accept only configured frontends.
 app.use(
   cors({
-    origin: ["https://product-5.onrender.com", "http://localhost:3000"],
+    origin: [
+      "https://product-5.onrender.com",
+      "http://localhost:3000",
+      "http://localhost:5000",
+      "http://localhost:5174",
+      "https://scalably-filamented-junie.ngrok-free.dev",
+      "https://product-3-96i8.onrender.com", // Add your backend URL too
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "ngrok-skip-browser-warning",
+    ],
   })
 );
 
@@ -61,14 +75,39 @@ app.use(
   })
 );
 
-// Handle preflight requests
-app.options("*", cors());
+// Handle preflight requests properly
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", req.headers.origin);
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning"
+  );
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.status(200).send();
+});
 
 // Log all incoming requests (helpful for debugging)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  console.log("Origin:", req.headers.origin);
-  console.log("User-Agent:", req.headers["user-agent"]);
+  const allowedOrigins = [
+    "https://product-5.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5000",
+    "http://localhost:5174",
+    "https://scalably-filamented-junie.ngrok-free.dev",
+    "https://product-3-96i8.onrender.com",
+  ];
+
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning"
+  );
   next();
 });
 
@@ -127,7 +166,6 @@ const dbConfig = {
   database: process.env.DB_NAME || "social_publisher",
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
 };
-
 console.log(
   `🗄️ DB host=${dbConfig.host} port=${dbConfig.port} user=${dbConfig.user} database=${dbConfig.database}`
 );

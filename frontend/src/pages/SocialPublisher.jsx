@@ -16,26 +16,18 @@ import {
 // const API_URL = "http://localhost:5000/api";
 const API_URL = "https://product-3-96i8.onrender.com/api";
 
-// const API_URL = window.location.hostname.includes("ngrok-free.dev")
-//   ? "https://scalably-filamented-junie.ngrok-free.dev/api"
-//   : "http://localhost:5000/api";
-
-const customFetch = (url, options = {}) => {
-  const defaultOptions = {
+const apiFetch = async (url, options = {}) => {
+  const config = {
+    ...options,
+    credentials: "include", // Important for CORS with credentials
     headers: {
-      "ngrok-skip-browser-warning": "true",
-      "User-Agent": "custom-agent",
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "true", // If using ngrok
+      ...options.headers,
     },
   };
 
-  return fetch(url, {
-    ...defaultOptions,
-    ...options,
-    headers: {
-      ...defaultOptions.headers,
-      ...options.headers,
-    },
-  });
+  return fetch(url, config);
 };
 
 export default function SocialPublisher() {
@@ -86,7 +78,7 @@ export default function SocialPublisher() {
 
   const fetchPlatforms = async () => {
     try {
-      const response = await customFetch(`${API_URL}/platforms`);
+      const response = await apiFetch(`${API_URL}/platforms`);
       const data = await response.json();
       if (data.success) setPlatforms(data.data);
     } catch (error) {
@@ -96,7 +88,7 @@ export default function SocialPublisher() {
 
   const fetchPosts = async () => {
     try {
-      const response = await customFetch(`${API_URL}/posts`);
+      const response = await apiFetch(`${API_URL}/posts`);
       const data = await response.json();
       if (data.success) setPosts(data.data);
     } catch (error) {
@@ -211,7 +203,7 @@ export default function SocialPublisher() {
         ? `${API_URL}/platforms/${editingPlatform.id}`
         : `${API_URL}/platforms`;
 
-      const response = await customFetch(url, {
+      const response = await apiFetch (url, {
         method: editingPlatform ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(platformForm),
