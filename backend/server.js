@@ -37,10 +37,20 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim())
   : DEFAULT_ALLOWED_ORIGINS;
 
+console.log("🔒 Allowed origins:", allowedOrigins);
 
-app.use(cors({
-  origin: "https://your-frontend-render-url.onrender.com",
-}));
+// Use a dynamic origin check so we can accept only configured frontends.
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      console.warn(`Blocked CORS origin: ${origin}`);
+      return callback(new Error("Not allowed by CORS"), false);
+    },
+  })
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -111,13 +121,20 @@ const upload = multer({
 });
 
 // MySQL Database Connection
+// Use environment variables configured on Render (or local env). If you
+// provisioned Postgres on Render instead of MySQL, let me know — the
+// code currently uses mysql2 and expects MySQL-compatible SQL/schema.
 const dbConfig = {
-  host: "dpg-d4ess8mr433s738tsrl0-a",
-  user: "social_publisher_user",
-  password: "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
-  database: "social_publisher",
-  port: 5432,
+  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a",
+  user: process.env.DB_USER || "social_publisher_user",
+  password: process.env.DB_PASSWORD || "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
+  database: process.env.DB_NAME || "social_publisher",
+  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
 };
+
+console.log(
+  `🗄️ DB host=${dbConfig.host} port=${dbConfig.port} user=${dbConfig.user} database=${dbConfig.database}`
+);
 
 // Facebook Configuration
 const FACEBOOK_CONFIG = {
