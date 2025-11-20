@@ -132,7 +132,7 @@ const dbConfig = {
 
 const connectionString =
   process.env.DATABASE_URL ||
-  "postgresql://social_publisher_user:T10mMINWDIYDpkIZjebZpaAMUsNq3SAf@dpg-d4ess8mr433s738tsrl0-a:5432/social_publisher";
+  "postgresql://social_publisher_user:T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf@dpg-d4ess8mr433s738tsrl0-a.oregon-postgres.render.com:5432/social_publisher";
 
 console.log(
   `🗄️ PostgreSQL DB: ${dbConfig.host}:${dbConfig.port} database=${dbConfig.database}`
