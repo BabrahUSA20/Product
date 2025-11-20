@@ -24,7 +24,7 @@ async function ensureBaseDir() {
 }
 app.use(
   cors({
-    origin: "https://product-10.onrender.com", // FRONTEND domain
+    origin: "https://product-11.onrender.com", // FRONTEND domain
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
