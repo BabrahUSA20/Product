@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 // const API_URL = "http://localhost:5000/api";
-const API_URL = "https://product-6-96i8.onrender.com/api";
+const API_URL = "https://product-6.onrender.com/api";
 
 const apiFetch = async (url, options = {}) => {
   const config = {
@@ -203,7 +203,7 @@ export default function SocialPublisher() {
         ? `${API_URL}/platforms/${editingPlatform.id}`
         : `${API_URL}/platforms`;
 
-      const response = await apiFetch (url, {
+      const response = await apiFetch(url, {
         method: editingPlatform ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(platformForm),
