@@ -55,13 +55,24 @@ app.use(
 
 // Handle preflight requests properly
 app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin);
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    "https://product-10.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ];
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header(
     "Access-Control-Allow-Headers",
     "Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning"
   );
   res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Max-Age", "86400"); // 24 hours
   res.status(200).send();
 });
 
