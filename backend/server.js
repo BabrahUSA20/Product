@@ -118,18 +118,21 @@ const upload = multer({
 
 // PostgreSQL Database Connection
 const dbConfig = {
-  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a", // Internal hostname only
+  host:
+    process.env.DB_HOST ||
+    "dpg-d4ess8mr433s738tsrl0-a.oregon-postgres.render.com", // Use external hostname for public access
   user: process.env.DB_USER || "social_publisher_user",
-  password: process.env.DB_PASSWORD || "T10mMINWDIYDpkIZjebZpaAMUsNq3SAf", // Fixed typo in password
+  password: process.env.DB_PASSWORD || "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
   database: process.env.DB_NAME || "social_publisher",
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
   ssl: {
-    rejectUnauthorized: false, // Required for Render PostgreSQL
+    rejectUnauthorized: false,
   },
 };
 
-const connectionString = process.env.DATABASE_URL || 
-  'postgresql://social_publisher_user:T10mMINWDIYDpkIZjebZpaAMUsNq3SAf@dpg-d4ess8mr433s738tsrl0-a:5432/social_publisher';
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://social_publisher_user:T10mMINWDIYDpkIZjebZpaAMUsNq3SAf@dpg-d4ess8mr433s738tsrl0-a:5432/social_publisher";
 
 console.log(
   `🗄️ PostgreSQL DB: ${dbConfig.host}:${dbConfig.port} database=${dbConfig.database}`
@@ -152,8 +155,8 @@ async function initDatabase() {
     pool = new Pool({
       connectionString: connectionString,
       ssl: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+      },
     });
 
     // Test connection
