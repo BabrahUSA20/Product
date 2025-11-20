@@ -16,7 +16,6 @@ import {
 // const API_URL = "http://localhost:5000/api";
 const API_URL = "https://product-12.onrender.com/api";
 
-
 const apiFetch = async (url, options = {}) => {
   const config = {
     ...options,
@@ -117,6 +116,78 @@ export default function SocialPublisher() {
     }
   };
 
+  // const handlePublish = async () => {
+  //   if (!formData.platform_id) {
+  //     alert("Please select a platform");
+  //     return;
+  //   }
+  //   if (!formData.title || !formData.description) {
+  //     alert("Please fill in title and description");
+  //     return;
+  //   }
+
+  //   setLoading(true);
+
+  //   try {
+  //     const form = new FormData();
+  //     Object.keys(formData).forEach((key) => {
+  //       if (formData[key] && key !== "image") {
+  //         form.append(key, formData[key]);
+  //       }
+  //     });
+
+  //     if (formData.image) {
+  //       form.append("image", formData.image);
+  //     }
+
+  //     const response = await fetch(`${API_URL}/posts`, {
+  //       method: "POST",
+  //       body: form,
+  //     });
+
+  //     const data = await response.json();
+
+  //     if (data.success) {
+  //       alert("Post published successfully!");
+  //       setFormData({
+  //         category: "car",
+  //         title: "",
+  //         description: "",
+  //         platform_id: "",
+  //         target_type: "page",
+  //         image: null,
+  //         car_brand: "",
+  //         car_model: "",
+  //         car_year: "",
+  //         car_price: "",
+  //         car_condition: "new",
+  //         car_mileage: "",
+  //         car_transmission: "automatic",
+  //         car_fuel_type: "",
+  //         announcement_type: "",
+  //         event_date: "",
+  //         event_location: "",
+  //         news_source: "",
+  //         news_author: "",
+  //         update_type: "",
+  //         update_priority: "medium",
+  //       });
+  //       setImagePreview(null);
+  //       fetchPosts();
+  //     } else {
+  //       alert("Error: " + data.error);
+  //     }
+  //   } catch (error) {
+  //     let errorMsg = error.message;
+  //     if (errorMsg.includes("Facebook API Error")) {
+  //       errorMsg = `Facebook posting failed: ${errorMsg}`;
+  //     }
+  //     alert("Error publishing post: " + errorMsg);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
   const handlePublish = async () => {
     if (!formData.platform_id) {
       alert("Please select a platform");
@@ -176,7 +247,18 @@ export default function SocialPublisher() {
         setImagePreview(null);
         fetchPosts();
       } else {
-        alert("Error: " + data.error);
+        // ✅ ADDED: Handle duplicate image error
+        if (data.error === "Duplicate image detected" && data.duplicate_info) {
+          alert(
+            `❌ Duplicate image detected!\n\nThis image was already posted as: "${
+              data.duplicate_info.title
+            }"\nPosted on: ${new Date(
+              data.duplicate_info.posted_at
+            ).toLocaleString()}\n\nPlease use a different image.`
+          );
+        } else {
+          alert("Error: " + data.error);
+        }
       }
     } catch (error) {
       let errorMsg = error.message;
@@ -188,7 +270,6 @@ export default function SocialPublisher() {
       setLoading(false);
     }
   };
-
   const handleAddPlatform = async () => {
     if (
       !platformForm.name ||

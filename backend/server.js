@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs").promises;
 const FormData = require("form-data");
+const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -188,35 +189,39 @@ async function initDatabase() {
     `);
 
     await client.query(`
-      CREATE TABLE IF NOT EXISTS posts (
-        id SERIAL PRIMARY KEY,
-        category VARCHAR(20) CHECK (category IN ('car', 'announcement', 'news', 'update')) NOT NULL,
-        title VARCHAR(255),
-        description TEXT,
-        car_brand VARCHAR(100),
-        car_model VARCHAR(100),
-        car_year VARCHAR(4),
-        car_price DECIMAL(15, 2),
-        car_condition VARCHAR(10) CHECK (car_condition IN ('new', 'used')),
-        car_mileage VARCHAR(50),
-        car_transmission VARCHAR(10) CHECK (car_transmission IN ('automatic', 'manual')),
-        car_fuel_type VARCHAR(50),
-        announcement_type VARCHAR(100),
-        event_date DATE,
-        event_location VARCHAR(255),
-        news_source VARCHAR(255),
-        news_author VARCHAR(100),
-        update_type VARCHAR(100),
-        update_priority VARCHAR(10) CHECK (update_priority IN ('low', 'medium', 'high', 'urgent')),
-        image_url VARCHAR(255),
-        platform_id INT REFERENCES platforms(id),
-        target_type VARCHAR(10) CHECK (target_type IN ('page', 'feed', 'story')) NOT NULL,
-        platform_post_id VARCHAR(255),
-        status VARCHAR(30) CHECK (status IN ('pending', 'published', 'failed', 'manual_posting_required')) DEFAULT 'pending',
-        error_message TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  CREATE TABLE IF NOT EXISTS posts (
+    id SERIAL PRIMARY KEY,
+    category VARCHAR(20) CHECK (category IN ('car', 'announcement', 'news', 'update')) NOT NULL,
+    title VARCHAR(255),
+    description TEXT,
+    car_brand VARCHAR(100),
+    car_model VARCHAR(100),
+    car_year VARCHAR(4),
+    car_price DECIMAL(15, 2),
+    car_condition VARCHAR(10) CHECK (car_condition IN ('new', 'used')),
+    car_mileage VARCHAR(50),
+    car_transmission VARCHAR(10) CHECK (car_transmission IN ('automatic', 'manual')),
+    car_fuel_type VARCHAR(50),
+    announcement_type VARCHAR(100),
+    event_date DATE,
+    event_location VARCHAR(255),
+    news_source VARCHAR(255),
+    news_author VARCHAR(100),
+    update_type VARCHAR(100),
+    update_priority VARCHAR(10) CHECK (update_priority IN ('low', 'medium', 'high', 'urgent')),
+    image_url VARCHAR(255),
+    image_hash VARCHAR(64), -- NEW: Store SHA-256 hash of image
+    platform_id INT REFERENCES platforms(id),
+    target_type VARCHAR(10) CHECK (target_type IN ('feed')) NOT NULL DEFAULT 'feed',
+    platform_post_id VARCHAR(255),
+    status VARCHAR(30) CHECK (status IN ('pending', 'published', 'failed', 'manual_posting_required')) DEFAULT 'pending',
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+    await client.query(`
+  CREATE INDEX IF NOT EXISTS idx_posts_image_hash ON posts(image_hash)
+`);
 
     const existing = await client.query(
       "SELECT id FROM platforms WHERE page_id = $1",
@@ -249,6 +254,36 @@ async function initDatabase() {
 }
 
 initDatabase();
+
+// Function to generate image hash
+// async function generateImageHash(imagePath) {
+//   return new Promise((resolve, reject) => {
+//     const hash = crypto.createHash("sha256");
+//     const stream = fs.createReadStream(imagePath);
+
+//     stream.on("data", (data) => hash.update(data));
+//     stream.on("end", () => resolve(hash.digest("hex")));
+//     stream.on("error", (error) => reject(error));
+//   });
+// }
+
+// Function to check for duplicate images
+// async function checkDuplicateImage(imageHash, platformId) {
+//   try {
+//     const result = await pool.query(
+//       `SELECT id, title, created_at FROM posts
+//        WHERE image_hash = $1 AND platform_id = $2
+//        AND created_at > NOW() - INTERVAL '30 days'
+//        ORDER BY created_at DESC LIMIT 1`,
+//       [imageHash, platformId]
+//     );
+
+//     return result.rows[0] || null;
+//   } catch (error) {
+//     console.error("Error checking duplicate image:", error);
+//     return null;
+//   }
+// }
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -1001,11 +1036,207 @@ app.delete("/api/platforms/:id", async (req, res) => {
 });
 
 // Main posting endpoint
+// app.post("/api/posts", upload.single("image"), async (req, res) => {
+//   try {
+//     const { category, title, description, platform_id, target_type } = req.body;
+
+//     let normalizedTargetType = target_type;
+//     if (!normalizedTargetType) normalizedTargetType = "feed";
+//     if (normalizedTargetType === "user") normalizedTargetType = "feed";
+
+//     const imagePath = req.file ? req.file.path : null;
+//     const image_url = req.file
+//       ? `/uploads/${req.body.category || "general"}/${req.file.filename}`
+//       : null;
+
+//     console.log("📝 Post request:", {
+//       category,
+//       title,
+//       target_type,
+//       platform_id,
+//       image_url,
+//     });
+
+//       // Check for duplicate image if image is provided
+//     let imageHash = null;
+//     let duplicatePost = null;
+
+//     const platformsResult = await pool.query(
+//       "SELECT * FROM platforms WHERE id=$1",
+//       [platform_id]
+//     );
+
+//     if (platformsResult.rows.length === 0) {
+//       return res
+//         .status(404)
+//         .json({ success: false, error: "Platform not found" });
+//     }
+
+//     const platform = platformsResult.rows[0];
+//     const postData = { category, title, description, image_url, ...req.body };
+
+//     let platformPostId = null;
+//     let status = "pending";
+//     let errorMessage = null;
+
+//     try {
+//       if (platform.platform_type === "facebook") {
+//         if (normalizedTargetType === "story") {
+//           platformPostId = await postToFacebookStory(
+//             platform,
+//             postData,
+//             imagePath
+//           );
+//         } else {
+//           platformPostId = await postToFacebookFeed(
+//             platform,
+//             postData,
+//             imagePath
+//           );
+//         }
+//         status = "published";
+//       } else if (platform.platform_type === "instagram") {
+//         if (normalizedTargetType === "story") {
+//           platformPostId = await postToInstagramStory(
+//             platform,
+//             postData,
+//             imagePath
+//           );
+//         } else {
+//           platformPostId = await postToInstagramFeed(
+//             platform,
+//             postData,
+//             imagePath
+//           );
+//         }
+//         status = "published";
+//       } else {
+//         throw new Error("Platform not supported: " + platform.platform_type);
+//       }
+
+//       console.log(
+//         `✅ Successfully posted to ${platform.platform_type} ${normalizedTargetType}`
+//       );
+//     } catch (error) {
+//       try {
+//         const manualData = JSON.parse(error.message);
+//         if (manualData.type === "manual_posting_required") {
+//           status = "manual_posting_required";
+//           errorMessage = JSON.stringify(manualData);
+//           console.log("📋 Manual posting required:", manualData.platform);
+//         } else {
+//           status = "failed";
+//           errorMessage = error.message;
+//         }
+//       } catch (parseError) {
+//         status = "failed";
+//         errorMessage = error.message;
+//       }
+//       console.error("Publishing error:", errorMessage);
+//     }
+
+//     const result = await pool.query(
+//       `INSERT INTO posts (
+//         category, title, description, image_url, platform_id, target_type,
+//         platform_post_id, status, error_message,
+//         car_brand, car_model, car_year, car_price, car_condition, car_mileage,
+//         car_transmission, car_fuel_type, announcement_type, event_date, event_location,
+//         news_source, news_author, update_type, update_priority
+//       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING *`,
+//       [
+//         category,
+//         title,
+//         description,
+//         image_url || null,
+//         platform_id,
+//         normalizedTargetType,
+//         platformPostId || null,
+//         status,
+//         errorMessage || null,
+//         req.body.car_brand || null,
+//         req.body.car_model || null,
+//         req.body.car_year || null,
+//         req.body.car_price || null,
+//         req.body.car_condition || null,
+//         req.body.car_mileage || null,
+//         req.body.car_transmission || null,
+//         req.body.car_fuel_type || null,
+//         req.body.announcement_type || null,
+//         req.body.event_date || null,
+//         req.body.event_location || null,
+//         req.body.news_source || null,
+//         req.body.news_author || null,
+//         req.body.update_type || null,
+//         req.body.update_priority || null,
+//       ]
+//     );
+
+//     const responseData = {
+//       id: result.rows[0].id,
+//       platform_post_id: platformPostId,
+//       status,
+//       error_message: errorMessage,
+//     };
+
+//     if (status === "manual_posting_required" && errorMessage) {
+//       try {
+//         const manualData = JSON.parse(errorMessage);
+//         responseData.manual_posting = manualData;
+//       } catch (e) {
+//         // Ignore parse errors
+//       }
+//     }
+
+//     res.json({
+//       success: status === "published" || status === "manual_posting_required",
+//       data: responseData,
+//       message:
+//         status === "published"
+//           ? "Post published successfully"
+//           : status === "manual_posting_required"
+//           ? "Manual posting required - see instructions"
+//           : "Post failed to publish",
+//     });
+//   } catch (error) {
+//     console.error("Post creation error:", error);
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// });
+
+// Function to generate image hash
+async function generateImageHash(imagePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(imagePath);
+
+    stream.on("data", (data) => hash.update(data));
+    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("error", (error) => reject(error));
+  });
+}
+
+// Function to check for duplicate images
+async function checkDuplicateImage(imageHash, platformId) {
+  try {
+    const result = await pool.query(
+      `SELECT id, title, created_at FROM posts 
+       WHERE image_hash = $1 AND platform_id = $2 
+       AND created_at > NOW() - INTERVAL '30 days'
+       ORDER BY created_at DESC LIMIT 1`,
+      [imageHash, platformId]
+    );
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error("Error checking duplicate image:", error);
+    return null;
+  }
+}
+
 app.post("/api/posts", upload.single("image"), async (req, res) => {
   try {
     const { category, title, description, platform_id, target_type } = req.body;
-    // Normalize target_type values coming from frontend (e.g. 'user')
-    // to match the DB CHECK constraint which allows: 'page','feed','story'
+
     let normalizedTargetType = target_type;
     if (!normalizedTargetType) normalizedTargetType = "feed";
     if (normalizedTargetType === "user") normalizedTargetType = "feed";
@@ -1022,6 +1253,38 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
       platform_id,
       image_url,
     });
+
+    // ✅ ADDED: Check for duplicate image if image is provided
+    let imageHash = null;
+    let duplicatePost = null;
+
+    if (imagePath) {
+      try {
+        // Generate hash of the image content
+        imageHash = await generateImageHash(imagePath);
+        console.log(`🔍 Image hash: ${imageHash}`);
+
+        // Check if this image was already posted to the same platform recently
+        duplicatePost = await checkDuplicateImage(imageHash, platform_id);
+
+        if (duplicatePost) {
+          return res.status(400).json({
+            success: false,
+            error: "Duplicate image detected",
+            duplicate_info: {
+              post_id: duplicatePost.id,
+              title: duplicatePost.title,
+              posted_at: duplicatePost.created_at,
+              message:
+                "This image has already been posted to this platform recently.",
+            },
+          });
+        }
+      } catch (hashError) {
+        console.error("Error generating image hash:", hashError);
+        // Continue without hash if there's an error
+      }
+    }
 
     const platformsResult = await pool.query(
       "SELECT * FROM platforms WHERE id=$1",
@@ -1097,19 +1360,21 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
       console.error("Publishing error:", errorMessage);
     }
 
+    // ✅ UPDATED: Include image_hash in the INSERT query
     const result = await pool.query(
       `INSERT INTO posts (
-        category, title, description, image_url, platform_id, target_type, 
+        category, title, description, image_url, image_hash, platform_id, target_type, 
         platform_post_id, status, error_message,
         car_brand, car_model, car_year, car_price, car_condition, car_mileage, 
         car_transmission, car_fuel_type, announcement_type, event_date, event_location,
         news_source, news_author, update_type, update_priority
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING *`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING *`,
       [
         category,
         title,
         description,
         image_url || null,
+        imageHash || null, // ✅ ADDED: Store the image hash
         platform_id,
         normalizedTargetType,
         platformPostId || null,
