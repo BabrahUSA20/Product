@@ -1004,6 +1004,11 @@ app.delete("/api/platforms/:id", async (req, res) => {
 app.post("/api/posts", upload.single("image"), async (req, res) => {
   try {
     const { category, title, description, platform_id, target_type } = req.body;
+    // Normalize target_type values coming from frontend (e.g. 'user')
+    // to match the DB CHECK constraint which allows: 'page','feed','story'
+    let normalizedTargetType = target_type;
+    if (!normalizedTargetType) normalizedTargetType = "feed";
+    if (normalizedTargetType === "user") normalizedTargetType = "feed";
 
     const imagePath = req.file ? req.file.path : null;
     const image_url = req.file
@@ -1038,7 +1043,7 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
 
     try {
       if (platform.platform_type === "facebook") {
-        if (target_type === "story") {
+        if (normalizedTargetType === "story") {
           platformPostId = await postToFacebookStory(
             platform,
             postData,
@@ -1053,7 +1058,7 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
         }
         status = "published";
       } else if (platform.platform_type === "instagram") {
-        if (target_type === "story") {
+        if (normalizedTargetType === "story") {
           platformPostId = await postToInstagramStory(
             platform,
             postData,
@@ -1072,7 +1077,7 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
       }
 
       console.log(
-        `✅ Successfully posted to ${platform.platform_type} ${target_type}`
+        `✅ Successfully posted to ${platform.platform_type} ${normalizedTargetType}`
       );
     } catch (error) {
       try {
@@ -1106,7 +1111,7 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
         description,
         image_url || null,
         platform_id,
-        target_type,
+        normalizedTargetType,
         platformPostId || null,
         status,
         errorMessage || null,
