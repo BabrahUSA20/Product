@@ -36,7 +36,6 @@ app.use(
   })
 );
 
-
 app.options("*", cors());
 
 app.use(express.json());
@@ -59,13 +58,13 @@ app.options("*", (req, res) => {
   const allowedOrigins = [
     "https://product-10.onrender.com",
     "http://localhost:3000",
-    "http://localhost:5173"
+    "http://localhost:5173",
   ];
-  
+
   if (allowedOrigins.includes(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
   }
-  
+
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header(
     "Access-Control-Allow-Headers",
@@ -591,13 +590,14 @@ async function postToInstagramFeed(platform, postData, imagePath) {
     const caption = formatPostMessage(postData.category, postData);
 
     // Instagram API requires publicly accessible image URLs (NOT file uploads)
-    const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+    const publicBaseUrl =
+      process.env.PUBLIC_BASE_URL || "https://product-12.onrender.com";
     let fullImageUrl;
 
-    if (publicBaseUrl) {
-      // Use configured public URL (e.g., ngrok)
+    if (publicBaseUrl && !publicBaseUrl.includes("localhost")) {
+      // Use configured public URL (e.g., Render deployment or ngrok)
       fullImageUrl = `${publicBaseUrl}${postData.image_url}`;
-      console.log("🌐 Using configured public URL:", fullImageUrl);
+      console.log("🌐 Using public URL:", fullImageUrl);
     } else {
       // No public URL available - Instagram API cannot access localhost
       fullImageUrl = `http://localhost:${PORT}${postData.image_url}`;
@@ -745,13 +745,14 @@ async function postToInstagramStory(platform, postData, imagePath) {
     console.log("📸 Creating Instagram Story container...");
 
     // Instagram API requires publicly accessible image URLs (NOT file uploads)
-    const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+    const publicBaseUrl =
+      process.env.PUBLIC_BASE_URL || "https://product-12.onrender.com";
     let fullImageUrl;
 
-    if (publicBaseUrl) {
-      // Use configured public URL (e.g., ngrok)
+    if (publicBaseUrl && !publicBaseUrl.includes("localhost")) {
+      // Use configured public URL (e.g., Render deployment or ngrok)
       fullImageUrl = `${publicBaseUrl}${postData.image_url}`;
-      console.log("🌐 Using configured public URL for Story:", fullImageUrl);
+      console.log("🌐 Using public URL for Story:", fullImageUrl);
     } else {
       // No public URL available - Instagram API cannot access localhost
       fullImageUrl = `http://localhost:${PORT}${postData.image_url}`;
