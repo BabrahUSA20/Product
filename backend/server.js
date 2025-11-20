@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const mysql = require("mysql2/promise");
+const { Pool } = require("pg");
 const axios = require("axios");
 const multer = require("multer");
 const path = require("path");
@@ -41,6 +41,7 @@ app.options("*", cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 // Serve static files with proper headers for external access
 app.use(
   "/uploads",
@@ -66,25 +67,9 @@ app.options("*", (req, res) => {
 
 // Log all incoming requests (helpful for debugging)
 app.use((req, res, next) => {
-  const allowedOrigins = [
-    "https://product-5.onrender.com",
-    "http://localhost:3000",
-    "http://localhost:5000",
-    "http://localhost:5174",
-    "https://scalably-filamented-junie.ngrok-free.dev",
-    "https://product-3-96i8.onrender.com",
-  ];
-
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning"
-  );
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log("Origin:", req.headers.origin);
+  console.log("User-Agent:", req.headers["user-agent"]);
   next();
 });
 
@@ -132,20 +117,24 @@ const upload = multer({
   },
 });
 
-// MySQL Database Connection
-// Use environment variables configured on Render (or local env). If you
-// provisioned Postgres on Render instead of MySQL, let me know — the
-// code currently uses mysql2 and expects MySQL-compatible SQL/schema.
+// PostgreSQL Database Connection
 const dbConfig = {
-  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a",
+  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a.postgres.render.com",
   user: process.env.DB_USER || "social_publisher_user",
   password: process.env.DB_PASSWORD || "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
   database: process.env.DB_NAME || "social_publisher",
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 };
+
 console.log(
-  `🗄️ DB host=${dbConfig.host} port=${dbConfig.port} user=${dbConfig.user} database=${dbConfig.database}`
+  `🗄️ PostgreSQL DB: ${dbConfig.host}:${dbConfig.port} database=${dbConfig.database}`
 );
+
+let pool;
 
 // Facebook Configuration
 const FACEBOOK_CONFIG = {
@@ -157,38 +146,40 @@ const FACEBOOK_CONFIG = {
     "EAATAkh9jShwBP7CO09XXM27PAyWMnfXFx2xZBxBrZCuBTkZCW2g41WfJudTBCeqVcQ7YEGeoz0ZAE3iw7tV8CIBO1jnM5V5cEvI13cGhR4RoEnY5ispspeRZAK2xAYGkdrw9RzZBZBZCwI14nMBoCnMwXZC0vCAfppZA1iiOUwJuKc1C0MOv8QZBBuSAvt7ormz2yPll0czgKsUK3tFq7odq7kQlb569ZBAZBEMsxvQoyu9Ml3sXlOOHZBTNclOq2TyeHwYHKTg7hRKWyHJ7PQbGoZD",
 };
 
-let db;
-
 async function initDatabase() {
   try {
-    db = await mysql.createConnection(dbConfig);
-    console.log("✅ Database connected successfully");
+    pool = new Pool(dbConfig);
 
-    await db.execute(`
+    // Test connection
+    const client = await pool.connect();
+    console.log("✅ PostgreSQL database connected successfully");
+
+    // Create tables if they don't exist
+    await client.query(`
       CREATE TABLE IF NOT EXISTS platforms (
-        id INT PRIMARY KEY AUTO_INCREMENT,
+        id SERIAL PRIMARY KEY,
         name VARCHAR(50) NOT NULL,
         page_id VARCHAR(255),
         access_token TEXT,
         instagram_business_account_id VARCHAR(255),
-        platform_type ENUM('facebook', 'instagram', 'twitter', 'linkedin') NOT NULL,
+        platform_type VARCHAR(20) CHECK (platform_type IN ('facebook', 'instagram', 'twitter', 'linkedin')) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    await db.execute(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS posts (
-        id INT PRIMARY KEY AUTO_INCREMENT,
-        category ENUM('car', 'announcement', 'news', 'update') NOT NULL,
+        id SERIAL PRIMARY KEY,
+        category VARCHAR(20) CHECK (category IN ('car', 'announcement', 'news', 'update')) NOT NULL,
         title VARCHAR(255),
         description TEXT,
         car_brand VARCHAR(100),
         car_model VARCHAR(100),
         car_year VARCHAR(4),
         car_price DECIMAL(15, 2),
-        car_condition ENUM('new', 'used'),
+        car_condition VARCHAR(10) CHECK (car_condition IN ('new', 'used')),
         car_mileage VARCHAR(50),
-        car_transmission ENUM('automatic', 'manual'),
+        car_transmission VARCHAR(10) CHECK (car_transmission IN ('automatic', 'manual')),
         car_fuel_type VARCHAR(50),
         announcement_type VARCHAR(100),
         event_date DATE,
@@ -196,26 +187,25 @@ async function initDatabase() {
         news_source VARCHAR(255),
         news_author VARCHAR(100),
         update_type VARCHAR(100),
-        update_priority ENUM('low', 'medium', 'high', 'urgent'),
+        update_priority VARCHAR(10) CHECK (update_priority IN ('low', 'medium', 'high', 'urgent')),
         image_url VARCHAR(255),
-        platform_id INT,
-        target_type ENUM('page', 'feed', 'story') NOT NULL,
+        platform_id INT REFERENCES platforms(id),
+        target_type VARCHAR(10) CHECK (target_type IN ('page', 'feed', 'story')) NOT NULL,
         platform_post_id VARCHAR(255),
-        status ENUM('pending', 'published', 'failed', 'manual_posting_required') DEFAULT 'pending',
+        status VARCHAR(30) CHECK (status IN ('pending', 'published', 'failed', 'manual_posting_required')) DEFAULT 'pending',
         error_message TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (platform_id) REFERENCES platforms(id)
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    const [existing] = await db.execute(
-      "SELECT id FROM platforms WHERE page_id = ?",
+    const existing = await client.query(
+      "SELECT id FROM platforms WHERE page_id = $1",
       [FACEBOOK_CONFIG.pageId]
     );
 
-    if (existing.length === 0) {
-      await db.execute(
-        `INSERT INTO platforms (name, platform_type, page_id, access_token) VALUES (?, ?, ?, ?)`,
+    if (existing.rows.length === 0) {
+      await client.query(
+        `INSERT INTO platforms (name, platform_type, page_id, access_token) VALUES ($1, $2, $3, $4)`,
         [
           "CarSocial Facebook Page",
           "facebook",
@@ -225,12 +215,14 @@ async function initDatabase() {
       );
       console.log("✅ Default Facebook platform created");
     } else {
-      await db.execute(
-        `UPDATE platforms SET access_token = ? WHERE page_id = ?`,
+      await client.query(
+        `UPDATE platforms SET access_token = $1 WHERE page_id = $2`,
         [FACEBOOK_CONFIG.defaultAccessToken, FACEBOOK_CONFIG.pageId]
       );
       console.log("✅ Updated Facebook platform with new token");
     }
+
+    client.release();
   } catch (error) {
     console.error("❌ Database initialization error:", error);
   }
@@ -858,11 +850,12 @@ async function postToInstagramStory(platform, postData, imagePath) {
 
 app.get("/api/platforms", async (req, res) => {
   try {
-    const [platforms] = await db.execute(
+    const result = await pool.query(
       "SELECT id, name, platform_type, page_id, instagram_business_account_id, created_at FROM platforms ORDER BY created_at DESC"
     );
-    res.json({ success: true, data: platforms });
+    res.json({ success: true, data: result.rows });
   } catch (error) {
+    console.error("Error fetching platforms:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -906,15 +899,15 @@ app.post("/api/platforms/instagram/setup", async (req, res) => {
 
     const platformName = name || `Instagram - ${pageTokenResult.page_name}`;
 
-    const [result] = await db.execute(
-      "INSERT INTO platforms (name, page_id, access_token, instagram_business_account_id, platform_type) VALUES (?, ?, ?, ?, ?)",
+    const result = await pool.query(
+      "INSERT INTO platforms (name, page_id, access_token, instagram_business_account_id, platform_type) VALUES ($1, $2, $3, $4, $5) RETURNING *",
       [platformName, pageIdToUse, access_token, igAccountId, "instagram"]
     );
 
     res.json({
       success: true,
       data: {
-        id: result.insertId,
+        id: result.rows[0].id,
         name: platformName,
         platform_type: "instagram",
         page_id: pageIdToUse,
@@ -939,15 +932,15 @@ app.post("/api/platforms", async (req, res) => {
       });
     }
 
-    const [result] = await db.execute(
-      "INSERT INTO platforms (name, page_id, access_token, platform_type) VALUES (?, ?, ?, ?)",
+    const result = await pool.query(
+      "INSERT INTO platforms (name, page_id, access_token, platform_type) VALUES ($1, $2, $3, $4) RETURNING *",
       [name, page_id, access_token, platform_type]
     );
 
     res.json({
       success: true,
       data: {
-        id: result.insertId,
+        id: result.rows[0].id,
         name,
         platform_type,
         page_id,
@@ -963,8 +956,8 @@ app.put("/api/platforms/:id", async (req, res) => {
     const { id } = req.params;
     const { name, page_id, access_token, platform_type } = req.body;
 
-    await db.execute(
-      "UPDATE platforms SET name=?, page_id=?, access_token=?, platform_type=? WHERE id=?",
+    await pool.query(
+      "UPDATE platforms SET name=$1, page_id=$2, access_token=$3, platform_type=$4 WHERE id=$5",
       [name, page_id, access_token, platform_type, id]
     );
 
@@ -977,8 +970,8 @@ app.put("/api/platforms/:id", async (req, res) => {
 app.delete("/api/platforms/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    await db.execute("DELETE FROM posts WHERE platform_id = ?", [id]);
-    await db.execute("DELETE FROM platforms WHERE id = ?", [id]);
+    await pool.query("DELETE FROM posts WHERE platform_id = $1", [id]);
+    await pool.query("DELETE FROM platforms WHERE id = $1", [id]);
     res.json({ success: true, message: "Platform deleted successfully" });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1003,17 +996,18 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
       image_url,
     });
 
-    const [platforms] = await db.execute("SELECT * FROM platforms WHERE id=?", [
-      platform_id,
-    ]);
+    const platformsResult = await pool.query(
+      "SELECT * FROM platforms WHERE id=$1",
+      [platform_id]
+    );
 
-    if (platforms.length === 0) {
+    if (platformsResult.rows.length === 0) {
       return res
         .status(404)
         .json({ success: false, error: "Platform not found" });
     }
 
-    const platform = platforms[0];
+    const platform = platformsResult.rows[0];
     const postData = { category, title, description, image_url, ...req.body };
 
     let platformPostId = null;
@@ -1076,14 +1070,14 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
       console.error("Publishing error:", errorMessage);
     }
 
-    const [result] = await db.execute(
+    const result = await pool.query(
       `INSERT INTO posts (
         category, title, description, image_url, platform_id, target_type, 
         platform_post_id, status, error_message,
         car_brand, car_model, car_year, car_price, car_condition, car_mileage, 
         car_transmission, car_fuel_type, announcement_type, event_date, event_location,
         news_source, news_author, update_type, update_priority
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) RETURNING *`,
       [
         category,
         title,
@@ -1113,7 +1107,7 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
     );
 
     const responseData = {
-      id: result.insertId,
+      id: result.rows[0].id,
       platform_post_id: platformPostId,
       status,
       error_message: errorMessage,
@@ -1146,13 +1140,13 @@ app.post("/api/posts", upload.single("image"), async (req, res) => {
 
 app.get("/api/posts", async (req, res) => {
   try {
-    const [posts] = await db.execute(`
+    const result = await pool.query(`
       SELECT p.*, pl.name as platform_name, pl.platform_type 
       FROM posts p 
       LEFT JOIN platforms pl ON p.platform_id = pl.id 
       ORDER BY p.created_at DESC
     `);
-    res.json({ success: true, data: posts });
+    res.json({ success: true, data: result.rows });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1161,19 +1155,19 @@ app.get("/api/posts", async (req, res) => {
 app.get("/api/posts/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const [posts] = await db.execute(
+    const result = await pool.query(
       `SELECT p.*, pl.name as platform_name, pl.platform_type 
        FROM posts p 
        LEFT JOIN platforms pl ON p.platform_id = pl.id 
-       WHERE p.id = ?`,
+       WHERE p.id = $1`,
       [id]
     );
 
-    if (posts.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ success: false, error: "Post not found" });
     }
 
-    const post = posts[0];
+    const post = result.rows[0];
 
     if (post.status === "manual_posting_required" && post.error_message) {
       try {
@@ -1191,7 +1185,7 @@ app.get("/api/posts/:id", async (req, res) => {
 
 app.get("/api/health", async (req, res) => {
   try {
-    await db.execute("SELECT 1");
+    await pool.query("SELECT 1");
     res.json({ success: true, message: "Server and database are running" });
   } catch (error) {
     res
@@ -1329,18 +1323,17 @@ app.post("/api/test-instagram-connection", async (req, res) => {
 app.get("/api/platforms/:id/validate", async (req, res) => {
   try {
     const { id } = req.params;
-    const [platforms] = await db.execute(
-      "SELECT * FROM platforms WHERE id = ?",
-      [id]
-    );
+    const result = await pool.query("SELECT * FROM platforms WHERE id = $1", [
+      id,
+    ]);
 
-    if (platforms.length === 0) {
+    if (result.rows.length === 0) {
       return res
         .status(404)
         .json({ success: false, error: "Platform not found" });
     }
 
-    const platform = platforms[0];
+    const platform = result.rows[0];
 
     if (!platform.access_token) {
       return res.json({
