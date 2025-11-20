@@ -22,7 +22,6 @@ async function ensureBaseDir() {
     console.error("❌ Failed to create base directory:", error);
   }
 }
-
 app.use(
   cors({
     origin: "*", // Allow all origins
@@ -119,16 +118,18 @@ const upload = multer({
 
 // PostgreSQL Database Connection
 const dbConfig = {
-  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a.postgres.render.com",
+  host: process.env.DB_HOST || "dpg-d4ess8mr433s738tsrl0-a", // Internal hostname only
   user: process.env.DB_USER || "social_publisher_user",
-  password: process.env.DB_PASSWORD || "T1OmMINWDIYDpkIZjebZpaAMUsNq3SAf",
+  password: process.env.DB_PASSWORD || "T10mMINWDIYDpkIZjebZpaAMUsNq3SAf", // Fixed typo in password
   database: process.env.DB_NAME || "social_publisher",
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
-  ssl:
-    process.env.NODE_ENV === "production"
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: {
+    rejectUnauthorized: false, // Required for Render PostgreSQL
+  },
 };
+
+const connectionString = process.env.DATABASE_URL || 
+  'postgresql://social_publisher_user:T10mMINWDIYDpkIZjebZpaAMUsNq3SAf@dpg-d4ess8mr433s738tsrl0-a:5432/social_publisher';
 
 console.log(
   `🗄️ PostgreSQL DB: ${dbConfig.host}:${dbConfig.port} database=${dbConfig.database}`
@@ -145,10 +146,15 @@ const FACEBOOK_CONFIG = {
   defaultAccessToken:
     "EAATAkh9jShwBP7CO09XXM27PAyWMnfXFx2xZBxBrZCuBTkZCW2g41WfJudTBCeqVcQ7YEGeoz0ZAE3iw7tV8CIBO1jnM5V5cEvI13cGhR4RoEnY5ispspeRZAK2xAYGkdrw9RzZBZBZCwI14nMBoCnMwXZC0vCAfppZA1iiOUwJuKc1C0MOv8QZBBuSAvt7ormz2yPll0czgKsUK3tFq7odq7kQlb569ZBAZBEMsxvQoyu9Ml3sXlOOHZBTNclOq2TyeHwYHKTg7hRKWyHJ7PQbGoZD",
 };
-
 async function initDatabase() {
   try {
-    pool = new Pool(dbConfig);
+    // ✅ UPDATED: Use connection string with SSL for Render
+    pool = new Pool({
+      connectionString: connectionString,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    });
 
     // Test connection
     const client = await pool.connect();

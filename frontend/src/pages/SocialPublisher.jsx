@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 // const API_URL = "http://localhost:5000/api";
-const API_URL = "https://product-3-96i8.onrender.com/api";
+const API_URL = "https://product-6-96i8.onrender.com/api";
 
 const apiFetch = async (url, options = {}) => {
   const config = {
